@@ -1,0 +1,150 @@
+@echo off
+cd /d %~dp0
+del temp_bcd.txt >nul 2>nul
+echo.
+echo ***************************************************
+echo windows 7 引导菜单修改工具
+echo     by tuwulin365 2010.9.22
+echo ***************************************************
+echo.
+echo 检测权限...
+bcdedit >temp_bcd.txt 2>nul
+type temp_bcd.txt | find "Windows Boot Manager" >nul && goto gaosir
+del temp_bcd.txt >nul 2>nul
+echo 请在VISTA/WIN7/2008系统中以管理员身份运行,任意键退出.
+pause>nul
+exit
+
+:gaosir
+echo 权限检测已通过
+
+:choose
+echo.
+echo ***************************************************
+echo   1. 在原有基础上添加
+echo   2. 完全新建
+echo ***************************************************
+echo.
+set /p temp=选择:
+
+if %temp%==1 goto modify
+if %temp%==2 goto new
+
+:modify
+if exist bcd_tmp del bcd_tmp
+bcdedit /export bcd_tmp
+goto ostype
+
+
+:new
+if exist bcd_tmp del bcd_tmp
+bcdedit /createstore bcd_tmp >nul
+::创建主菜单入口
+bcdedit /store bcd_tmp /create {bootmgr} /d "Windows Boot Manager" >nul
+bcdedit /store bcd_tmp /set {bootmgr} device partition=c: >nul
+bcdedit /store bcd_tmp /set {bootmgr} locale "zh-CN" >nul
+
+
+:ostype
+echo.
+echo ***************************************************
+echo   1. windows7/vista/2008
+echo   2. win xp/2000
+echo ***************************************************
+echo.
+set /p ostype=选择要添加的操作系统:
+
+if %ostype%==1 goto bootmgr
+if %ostype%==2 goto ntldr
+echo 参数错误
+goto ostype
+
+:bootmgr
+echo.
+echo 添加 windows 7启动菜单
+echo.
+set /p title=标题名:
+bcdedit /store bcd_tmp /create {ntldr} /d "%title%" >nul
+
+echo 复制括号内的字符，然后关闭记事本，不包括括号。 >ID.txt
+bcdedit /store bcd_tmp /create /d "%title%" /application osloader >>ID.txt
+echo.
+notepad.exe ID.txt
+set /p Id=粘贴数字ID，无括号:
+
+echo.
+set /p temp=win7所在盘，无冒号:
+
+bcdedit /store bcd_tmp /set {%Id%} device partition=%temp%: >nul
+
+bcdedit /store bcd_tmp /set {%Id%} path \windows\system32\winload.exe >nul
+
+bcdedit /store bcd_tmp /set {%Id%} osdevice partition=%temp%: >nul
+
+bcdedit /store bcd_tmp /set {%Id%} systemroot \windows >nul
+
+bcdedit /store bcd_tmp /set {%Id%} locale "zh-CN" >nul
+
+bcdedit /store bcd_tmp /displayorder {%Id%} /addfirst >nul
+
+echo.
+set /p temp=设置为默认操作系统? 1-Yes，2-No：
+if %temp%==1 bcdedit /store bcd_tmp /default {%Id%}
+
+echo.
+echo 成功添加win7菜单。
+
+echo.
+set /p temp=请选择,1-退出,2-继续:
+if %temp%==2 goto ostype 
+goto exit
+
+:ntldr
+echo.
+echo 添加 windows xp启动菜单
+echo.
+set /p title=标题名:
+bcdedit /store bcd_tmp /create {ntldr} /d "%title%" >nul
+
+echo.
+set /p temp=ntldr文件所在盘,无冒号:
+bcdedit /store bcd_tmp /set {ntldr} device partition=%temp%: >nul
+
+bcdedit /store bcd_tmp /set {ntldr} path \ntldr >nul
+
+bcdedit /store bcd_tmp /displayorder {ntldr} /addlast >nul
+
+echo.
+set /p temp=设置为默认操作系统？ 1-Yes，2-No：
+if %temp%==1 bcdedit /store bcd_tmp /default {legacy}
+
+echo.
+echo 成功添加xp菜单。
+echo.
+echo 1-退出
+echo 2-继续
+echo.
+set /p temp=请选择:
+if %temp%==2 goto ostype 
+goto exit
+
+:exit
+
+echo.
+set /p temp=设置等待时间,单位秒,不写单位:
+bcdedit /store bcd_tmp /timeout %temp% >nul
+
+echo.
+echo 当前BCD内容如下：
+echo.
+bcdedit /store bcd_tmp
+
+echo.
+set /p temp=确定无误,导入? 1-Yes,2-No:
+
+if %temp%==2 exit
+bcdedit /export c:\boot\bcd_bak
+bcdedit /import bcd_tmp
+
+pause
+exit
